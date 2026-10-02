@@ -18,13 +18,28 @@ public class TFPEV2 : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils",
+			"OnlineSubsystemNull",
+			"OnlineSubsystemSteam",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"TFPEV2",
+			"TFPEV2/Public",
+			"TFPEV2/Public/Characters",
+			"TFPEV2/Public/Core",
+			"TFPEV2/Public/Framework",
+			"TFPEV2/Public/Gameplay",
+			"TFPEV2/Public/Gameplay/Components",
+			"TFPEV2/Public/Interfaces",
+			"TFPEV2/Public/UI",
+			"TFPEV2/Public/Weapons",
 			"TFPEV2/Variant_Horror",
 			"TFPEV2/Variant_Horror/UI",
 			"TFPEV2/Variant_Shooter",
@@ -33,12 +48,8 @@ public class TFPEV2 : ModuleRules
 			"TFPEV2/Variant_Shooter/Weapons"
 		});
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+		PrivateIncludePaths.AddRange(new string[] {
+			"TFPEV2/Private",
+		});
 	}
 }

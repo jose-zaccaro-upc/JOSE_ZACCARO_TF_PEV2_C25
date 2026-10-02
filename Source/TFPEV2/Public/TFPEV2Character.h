@@ -19,7 +19,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  A basic first person character
  */
 UCLASS(abstract)
-class ATFPEV2Character : public ACharacter
+class TFPEV2_API ATFPEV2Character : public ACharacter
 {
 	GENERATED_BODY()
 
