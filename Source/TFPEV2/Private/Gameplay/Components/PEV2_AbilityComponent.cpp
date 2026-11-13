@@ -8,6 +8,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "Engine/World.h"
 #include "Gameplay/Weapons/PEV2_ProjectileBase.h"
+#include "Gameplay/Components/PEV2_HealthComponent.h"
 
 UPEV2_AbilityComponent::UPEV2_AbilityComponent()
 {
@@ -167,6 +168,7 @@ void UPEV2_AbilityComponent::ExecuteAbilityLogic(UPEV2_AbilityData* AbilityData)
 
 			if (Grenade)
 			{
+				Grenade->SetIsAbilityProjectile(true);
 				Grenade->FireInDirection(SpawnRotation.Vector(), AbilityData->GrenadeThrowImpulse);
 			}
 		}
@@ -187,7 +189,10 @@ void UPEV2_AbilityComponent::ExecuteAbilityLogic(UPEV2_AbilityData* AbilityData)
 
 	case EPEV2_AbilityType::Shield:
 	{
-		// Si el personaje cuenta con TakeDamage o HealthComponent, se añade absorción temporal
+		if (UPEV2_HealthComponent* HealthComp = CharacterOwner->FindComponentByClass<UPEV2_HealthComponent>())
+		{
+			HealthComp->AddShield(AbilityData->ShieldBonusAmount, AbilityData->ShieldDuration);
+		}
 		break;
 	}
 
