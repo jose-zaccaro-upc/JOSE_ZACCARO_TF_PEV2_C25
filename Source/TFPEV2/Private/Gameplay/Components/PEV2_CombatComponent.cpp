@@ -78,23 +78,19 @@ void UPEV2_CombatComponent::StartFiring()
 	{
 		// En el cliente: llamar al Server RPC de disparo garantizado a través del CombatComponent
 		Server_StartFiring(AimStart, AimDir);
-
-		// Ejecución local inmediata si el arma está instanciada
-		if (EquippedWeapon)
-		{
-			EquippedWeapon->StartFireWithAim(AimStart, AimDir);
-		}
 	}
 }
 
 void UPEV2_CombatComponent::StopFiring()
 {
-	if (EquippedWeapon)
+	if (GetOwner()->HasAuthority())
 	{
-		EquippedWeapon->StopFire();
+		if (EquippedWeapon)
+		{
+			EquippedWeapon->StopFire();
+		}
 	}
-
-	if (!GetOwner()->HasAuthority())
+	else
 	{
 		Server_StopFiring();
 	}

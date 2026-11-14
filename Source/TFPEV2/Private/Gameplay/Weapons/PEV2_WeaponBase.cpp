@@ -309,13 +309,20 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 
 	const bool bIsRotatedImport = MeshName.Contains(TEXT("zc57")) || MeshName.Contains(TEXT("zc-57")) || bCompensateImportRotation;
 
+	const FVector SafeFPScale = (FirstPersonWeaponScale.IsNearlyZero() || FirstPersonWeaponScale.X <= 0.001f || FirstPersonWeaponScale.Y <= 0.001f || FirstPersonWeaponScale.Z <= 0.001f) ? FVector(1.0f, 1.0f, 1.0f) : FirstPersonWeaponScale;
+	const FVector SafeTPScale = (ThirdPersonMeshScale.IsNearlyZero() || ThirdPersonMeshScale.X <= 0.001f || ThirdPersonMeshScale.Y <= 0.001f || ThirdPersonMeshScale.Z <= 0.001f) ? FVector(1.0f, 1.0f, 1.0f) : ThirdPersonMeshScale;
+
 	// Vincular mallas de tercera persona al cuerpo del personaje (HandGrip_R o fallback)
 	if (InCharacter->GetMesh())
 	{
 		FName TargetSocket = SocketName;
 		if (!InCharacter->GetMesh()->DoesSocketExist(TargetSocket))
 		{
-			if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("hand_r"))))
+			if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("HandGrip_R"))))
+			{
+				TargetSocket = FName(TEXT("HandGrip_R"));
+			}
+			else if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("hand_r"))))
 			{
 				TargetSocket = FName(TEXT("hand_r"));
 			}
@@ -339,9 +346,9 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			ThirdPersonMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSocket);
 			ThirdPersonMesh->SetRelativeLocationAndRotation(ThirdPersonMeshOffset, TPFinalRot);
-			ThirdPersonMesh->SetRelativeScale3D(ThirdPersonMeshScale);
-			ThirdPersonMesh->SetOwnerNoSee(bIsLocalOwner);
-			ThirdPersonMesh->SetVisibility(!bIsLocalOwner, true);
+			ThirdPersonMesh->SetRelativeScale3D(SafeTPScale);
+			ThirdPersonMesh->SetOwnerNoSee(true);
+			ThirdPersonMesh->SetVisibility(true, true);
 		}
 		else if (ThirdPersonMesh)
 		{
@@ -352,9 +359,9 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			ThirdPersonStaticMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSocket);
 			ThirdPersonStaticMesh->SetRelativeLocationAndRotation(ThirdPersonMeshOffset, TPFinalRot);
-			ThirdPersonStaticMesh->SetRelativeScale3D(ThirdPersonMeshScale);
-			ThirdPersonStaticMesh->SetOwnerNoSee(bIsLocalOwner);
-			ThirdPersonStaticMesh->SetVisibility(!bIsLocalOwner, true);
+			ThirdPersonStaticMesh->SetRelativeScale3D(SafeTPScale);
+			ThirdPersonStaticMesh->SetOwnerNoSee(true);
+			ThirdPersonStaticMesh->SetVisibility(true, true);
 		}
 		else if (ThirdPersonStaticMesh)
 		{
@@ -375,7 +382,7 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		}
 	}
 
-	if (Cam && bIsLocalOwner)
+	if (Cam)
 	{
 		const FRotator FPFinalRot = bIsRotatedImport ? FRotator(-1.5f, -87.0f, -2.0f) : FirstPersonWeaponRotation;
 
@@ -383,7 +390,7 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			FirstPersonMesh->AttachToComponent(Cam, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 			FirstPersonMesh->SetRelativeLocationAndRotation(FirstPersonWeaponOffset, FPFinalRot);
-			FirstPersonMesh->SetRelativeScale3D(FirstPersonWeaponScale);
+			FirstPersonMesh->SetRelativeScale3D(SafeFPScale);
 			FirstPersonMesh->SetOnlyOwnerSee(true);
 			FirstPersonMesh->SetVisibility(true, true);
 			FirstPersonMesh->SetAnimInstanceClass(nullptr);
@@ -397,23 +404,11 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			FirstPersonStaticMesh->AttachToComponent(Cam, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 			FirstPersonStaticMesh->SetRelativeLocationAndRotation(FirstPersonWeaponOffset, FPFinalRot);
-			FirstPersonStaticMesh->SetRelativeScale3D(FirstPersonWeaponScale);
+			FirstPersonStaticMesh->SetRelativeScale3D(SafeFPScale);
 			FirstPersonStaticMesh->SetOnlyOwnerSee(true);
 			FirstPersonStaticMesh->SetVisibility(true, true);
 		}
 		else if (FirstPersonStaticMesh)
-		{
-			FirstPersonStaticMesh->SetVisibility(false, true);
-		}
-	}
-	else
-	{
-		// Si no es el dueño local, u omitimos cámara, ocultar terminantemente mallas 1P
-		if (FirstPersonMesh)
-		{
-			FirstPersonMesh->SetVisibility(false, true);
-		}
-		if (FirstPersonStaticMesh)
 		{
 			FirstPersonStaticMesh->SetVisibility(false, true);
 		}
@@ -470,36 +465,51 @@ FVector APEV2_WeaponBase::GetMuzzleLocation() const
 		{
 			if (FirstPersonMesh->DoesSocketExist(SName))
 			{
-				return FirstPersonMesh->GetSocketLocation(SName);
+				const FVector Loc = FirstPersonMesh->GetSocketLocation(SName);
+				if (!Loc.IsNearlyZero()) return Loc;
 			}
 		}
-		return FirstPersonMesh->GetComponentLocation() + (FirstPersonMesh->GetForwardVector() * 45.0f);
-	}
-
-	// 2. Malla de tercera persona (para remotos o si 1P no tiene socket)
-	if (ThirdPersonMesh && ThirdPersonMesh->GetSkeletalMeshAsset())
-	{
-		for (const FName& SName : CandidateSockets)
+		const FVector CompLoc = FirstPersonMesh->GetComponentLocation();
+		if (!CompLoc.IsNearlyZero())
 		{
-			if (ThirdPersonMesh->DoesSocketExist(SName))
-			{
-				return ThirdPersonMesh->GetSocketLocation(SName);
-			}
+			return CompLoc + (FirstPersonMesh->GetForwardVector() * 45.0f);
 		}
-		return ThirdPersonMesh->GetComponentLocation() + (ThirdPersonMesh->GetForwardVector() * 45.0f);
 	}
 
-	// 3. Malla estática de primera persona
+	// 2. Malla estática de primera persona
 	if (FirstPersonStaticMesh && FirstPersonStaticMesh->GetStaticMesh() && FirstPersonStaticMesh->IsVisible())
 	{
 		for (const FName& SName : CandidateSockets)
 		{
 			if (FirstPersonStaticMesh->DoesSocketExist(SName))
 			{
-				return FirstPersonStaticMesh->GetSocketLocation(SName);
+				const FVector Loc = FirstPersonStaticMesh->GetSocketLocation(SName);
+				if (!Loc.IsNearlyZero()) return Loc;
 			}
 		}
-		return FirstPersonStaticMesh->GetComponentLocation() + (FirstPersonStaticMesh->GetForwardVector() * 45.0f);
+		const FVector CompLoc = FirstPersonStaticMesh->GetComponentLocation();
+		if (!CompLoc.IsNearlyZero())
+		{
+			return CompLoc + (FirstPersonStaticMesh->GetForwardVector() * 45.0f);
+		}
+	}
+
+	// 3. Malla de tercera persona (para remotos o si 1P no tiene socket)
+	if (ThirdPersonMesh && ThirdPersonMesh->GetSkeletalMeshAsset())
+	{
+		for (const FName& SName : CandidateSockets)
+		{
+			if (ThirdPersonMesh->DoesSocketExist(SName))
+			{
+				const FVector Loc = ThirdPersonMesh->GetSocketLocation(SName);
+				if (!Loc.IsNearlyZero()) return Loc;
+			}
+		}
+		const FVector CompLoc = ThirdPersonMesh->GetComponentLocation();
+		if (!CompLoc.IsNearlyZero())
+		{
+			return CompLoc + (ThirdPersonMesh->GetForwardVector() * 45.0f);
+		}
 	}
 
 	// 4. Malla estática de tercera persona
@@ -509,23 +519,24 @@ FVector APEV2_WeaponBase::GetMuzzleLocation() const
 		{
 			if (ThirdPersonStaticMesh->DoesSocketExist(SName))
 			{
-				return ThirdPersonStaticMesh->GetSocketLocation(SName);
+				const FVector Loc = ThirdPersonStaticMesh->GetSocketLocation(SName);
+				if (!Loc.IsNearlyZero()) return Loc;
 			}
 		}
-		return ThirdPersonStaticMesh->GetComponentLocation() + (ThirdPersonStaticMesh->GetForwardVector() * 45.0f);
+		const FVector CompLoc = ThirdPersonStaticMesh->GetComponentLocation();
+		if (!CompLoc.IsNearlyZero())
+		{
+			return CompLoc + (ThirdPersonStaticMesh->GetForwardVector() * 45.0f);
+		}
 	}
 
-	// 5. Fallback seguro: socket de la mano del personaje o frente de la vista
+	// 5. Fallback seguro: vista del personaje frente a la cámara
 	if (ACharacter* CharOwner = Cast<ACharacter>(GetOwner()))
 	{
-		if (CharOwner->GetMesh() && CharOwner->GetMesh()->DoesSocketExist(FName(TEXT("HandGrip_R"))))
-		{
-			return CharOwner->GetMesh()->GetSocketLocation(FName(TEXT("HandGrip_R"))) + (CharOwner->GetActorForwardVector() * 45.0f);
-		}
-		return CharOwner->GetPawnViewLocation() + (CharOwner->GetActorForwardVector() * 40.0f);
+		return CharOwner->GetPawnViewLocation() + (CharOwner->GetActorForwardVector() * 35.0f);
 	}
 
-	return GetActorLocation() + (GetActorForwardVector() * 50.0f);
+	return GetActorLocation() + (GetActorForwardVector() * 40.0f);
 }
 
 bool APEV2_WeaponBase::CanFire() const
@@ -777,9 +788,17 @@ void APEV2_WeaponBase::PerformServerShot()
 	}
 	else
 	{
-		// En el servidor para clientes remotos (o bots), leer la posición y rotación sincronizada del Pawn en tiempo real
-		AimStart = CharacterOwner->GetPawnViewLocation();
-		AimDir = CharacterOwner->GetBaseAimRotation().Vector();
+		// En el servidor para clientes remotos (o bots), usar el vector recibido en el RPC o la rotación del Pawn
+		if (!LastAimDirection.IsNearlyZero())
+		{
+			AimStart = !LastAimStart.IsNearlyZero() ? LastAimStart : CharacterOwner->GetPawnViewLocation();
+			AimDir = LastAimDirection;
+		}
+		else
+		{
+			AimStart = CharacterOwner->GetPawnViewLocation();
+			AimDir = CharacterOwner->GetBaseAimRotation().Vector();
+		}
 	}
 
 	LastAimStart = AimStart;
