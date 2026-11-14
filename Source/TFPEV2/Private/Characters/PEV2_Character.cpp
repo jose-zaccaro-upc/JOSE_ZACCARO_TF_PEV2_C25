@@ -2,6 +2,7 @@
 #include "Gameplay/Components/PEV2_HealthComponent.h"
 #include "Gameplay/Components/PEV2_CombatComponent.h"
 #include "Gameplay/Components/PEV2_AbilityComponent.h"
+#include "Gameplay/Items/PEV2_AbilityData.h"
 #include "Gameplay/Weapons/PEV2_WeaponBase.h"
 #include "Gameplay/Weapons/PEV2_WeaponRoster.h"
 #include "Interfaces/PEV2_InteractableInterface.h"
@@ -10,6 +11,7 @@
 #include "Framework/PEV2_PlayerController.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/GameStateBase.h"
 #include "Camera/CameraComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputAction.h"
@@ -23,6 +25,7 @@ APEV2_Character::APEV2_Character()
 	bReplicates = true;
 	CurrentWeaponIndex = 0;
 	MeshAppearanceIndex = -1;
+	bUseMeshAppearanceVariations = false;
 	ReplicatedAimPitch = 0.0f;
 	bIsDeadCameraActive = false;
 	DeathCameraDistance = 280.0f;
@@ -169,18 +172,33 @@ void APEV2_Character::BeginPlay()
 			HealthComponent->OnDeathEvent.AddDynamic(this, &APEV2_Character::OnDeath);
 		}
 
-		// Asignar apariencia aleatoria si aún no tiene
-		if (MeshAppearanceIndex < 0)
+		// Asignar apariencia aleatoria solo si está habilitado
+		if (bUseMeshAppearanceVariations && MeshAppearanceIndex < 0)
 		{
 			MeshAppearanceIndex = FMath::RandRange(0, 3);
 			ApplyCharacterAppearance();
 		}
 
 		EquipCurrentWeaponTier();
+
+		if (AbilityComponent && !AbilityComponent->GetCurrentAbility())
+		{
+			if (DefaultAbilityData)
+			{
+				AbilityComponent->EquipAbility(DefaultAbilityData);
+			}
+			else if (UPEV2_AbilityData* FallbackAbility = LoadObject<UPEV2_AbilityData>(nullptr, TEXT("/Game/PEV2/Gameplay/Items/DA_Grenade.DA_Grenade")))
+			{
+				AbilityComponent->EquipAbility(FallbackAbility);
+			}
+		}
 	}
 	else
 	{
-		ApplyCharacterAppearance();
+		if (bUseMeshAppearanceVariations)
+		{
+			ApplyCharacterAppearance();
+		}
 	}
 }
 
@@ -430,10 +448,12 @@ void APEV2_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 		}
 	}
 
-	// Fallback directo de teclas (R = Recargar, Q = Habilidad / Granada, E = Interactuar)
-	// Asegura funcionamiento inmediato en PIE aún antes de configurar los assets en el IMC
+	// Fallback directo de teclas (Click Izquierdo = Disparar, R = Recargar, Q = Habilidad, E = Interactuar)
+	// Asegura funcionamiento inmediato en PIE para clientes y servidor aún antes de configurar los assets en el IMC
 	if (PlayerInputComponent)
 	{
+		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &APEV2_Character::DoFireStart);
+		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Released, this, &APEV2_Character::DoFireEnd);
 		PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &APEV2_Character::DoReload);
 		PlayerInputComponent->BindKey(EKeys::Q, IE_Pressed, this, &APEV2_Character::DoUseAbility);
 		PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &APEV2_Character::DoInteract);
@@ -449,8 +469,39 @@ void APEV2_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	}
 }
 
+bool APEV2_Character::CanPerformCombatActions() const
+{
+	if (bIsDeadCameraActive)
+	{
+		return false;
+	}
+
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return false;
+	}
+
+	if (const UWorld* World = GetWorld())
+	{
+		if (const AGameStateBase* GS = World->GetGameState())
+		{
+			if (GS->HasMatchEnded())
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 void APEV2_Character::DoFireStart()
 {
+	if (!CanPerformCombatActions())
+	{
+		return;
+	}
+
 	if (CombatComponent)
 	{
 		CombatComponent->StartFiring();
@@ -467,6 +518,11 @@ void APEV2_Character::DoFireEnd()
 
 void APEV2_Character::DoReload()
 {
+	if (!CanPerformCombatActions())
+	{
+		return;
+	}
+
 	if (CombatComponent)
 	{
 		CombatComponent->Reload();
@@ -475,6 +531,11 @@ void APEV2_Character::DoReload()
 
 void APEV2_Character::DoUseAbility()
 {
+	if (!CanPerformCombatActions())
+	{
+		return;
+	}
+
 	if (AbilityComponent)
 	{
 		AbilityComponent->UseAbility();
@@ -509,6 +570,17 @@ FVector APEV2_Character::GetCombatAimLocation() const
 
 FName APEV2_Character::GetWeaponAttachSocket(bool bFirstPerson) const
 {
+	if (GetMesh())
+	{
+		if (GetMesh()->DoesSocketExist(FName(TEXT("HandGrip_R"))))
+		{
+			return FName(TEXT("HandGrip_R"));
+		}
+		if (GetMesh()->DoesSocketExist(FName(TEXT("hand_r"))))
+		{
+			return FName(TEXT("hand_r"));
+		}
+	}
 	return FName(TEXT("HandGrip_R"));
 }
 
@@ -541,6 +613,11 @@ void APEV2_Character::OnDeath(AController* Killer, AActor* DamageCauser, const U
 
 void APEV2_Character::Multicast_PlayEliminationFX_Implementation()
 {
+	if (CombatComponent)
+	{
+		CombatComponent->StopFiring();
+	}
+
 	// Trigger Ragdoll
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
@@ -675,12 +752,15 @@ void APEV2_Character::OnRep_CurrentWeaponIndex()
 
 void APEV2_Character::OnRep_MeshAppearanceIndex()
 {
-	ApplyCharacterAppearance();
+	if (bUseMeshAppearanceVariations)
+	{
+		ApplyCharacterAppearance();
+	}
 }
 
 void APEV2_Character::ApplyCharacterAppearance()
 {
-	if (!GetMesh() || MeshAppearanceIndex < 0)
+	if (!bUseMeshAppearanceVariations || !GetMesh() || MeshAppearanceIndex < 0)
 	{
 		return;
 	}
@@ -765,7 +845,10 @@ void APEV2_Character::RestoreFromPlayerState(APEV2_PlayerState* InPS)
 	CurrentWeaponIndex = InPS->SavedWeaponTier;
 	MeshAppearanceIndex = InPS->CharacterAppearanceIndex;
 
-	ApplyCharacterAppearance();
+	if (bUseMeshAppearanceVariations)
+	{
+		ApplyCharacterAppearance();
+	}
 	EquipCurrentWeaponTier();
 	OnRep_CurrentWeaponIndex();
 }

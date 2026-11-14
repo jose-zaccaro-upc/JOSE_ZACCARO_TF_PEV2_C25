@@ -7,9 +7,12 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Blueprint/UserWidget.h"
 #include "Variant_Shooter/UI/ShooterBulletCounterUI.h"
+#include "UI/PEV2_GameHUDWidget.h"
 #include "Characters/PEV2_Character.h"
 #include "Gameplay/Components/PEV2_CombatComponent.h"
 #include "Gameplay/Components/PEV2_HealthComponent.h"
+#include "Gameplay/Components/PEV2_AbilityComponent.h"
+#include "Gameplay/Items/PEV2_AbilityData.h"
 #include "Gameplay/Weapons/PEV2_WeaponBase.h"
 #include "UI/PEV2_HUD.h"
 #include "Kismet/GameplayStatics.h"
@@ -37,11 +40,7 @@ APEV2_PlayerController::APEV2_PlayerController()
 		MobileExcludedMappingContexts.Add(MouseLookIMCObj.Object);
 	}
 
-	static ConstructorHelpers::FClassFinder<UUserWidget> DefaultHUDWidgetObj(TEXT("/Game/Variant_Shooter/UI/UI_ShooterBulletCounter.UI_ShooterBulletCounter_C"));
-	if (DefaultHUDWidgetObj.Succeeded())
-	{
-		HUDWidgetClass = DefaultHUDWidgetObj.Class;
-	}
+	HUDWidgetClass = UPEV2_GameHUDWidget::StaticClass();
 }
 
 void APEV2_PlayerController::AddDefaultMappingContext()
@@ -115,12 +114,9 @@ void APEV2_PlayerController::CreateHUDWidget()
 		return;
 	}
 
-	if (!HUDWidgetClass)
+	if (!HUDWidgetClass || HUDWidgetClass->GetName().Contains(TEXT("UI_ShooterBulletCounter")))
 	{
-		if (UClass* FallbackHUDClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Variant_Shooter/UI/UI_ShooterBulletCounter.UI_ShooterBulletCounter_C")))
-		{
-			HUDWidgetClass = FallbackHUDClass;
-		}
+		HUDWidgetClass = UPEV2_GameHUDWidget::StaticClass();
 	}
 
 	if (HUDWidgetClass && !ActiveHUDWidget)
@@ -154,6 +150,10 @@ void APEV2_PlayerController::BindToPawn(APawn* InPawn)
 			HealthComp->OnHealthChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleHealthChanged);
 			HealthComp->OnHealthChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleHealthChanged);
 			HandleHealthChanged(HealthComp, HealthComp->CurrentHealth, 0.0f, nullptr);
+
+			HealthComp->OnShieldChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleShieldChanged);
+			HealthComp->OnShieldChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleShieldChanged);
+			HandleShieldChanged(HealthComp, HealthComp->CurrentShield, 0.0f, HealthComp->MaxShield);
 		}
 
 		if (UPEV2_CombatComponent* CombatComp = PEV2Char->GetCombatComponent())
@@ -166,6 +166,66 @@ void APEV2_PlayerController::BindToPawn(APawn* InPawn)
 				HandleEquippedWeaponChanged(CurrentWeapon);
 			}
 		}
+
+		PEV2Char->OnWeaponTierChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleWeaponTierChanged);
+		PEV2Char->OnWeaponTierChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleWeaponTierChanged);
+
+		if (UPEV2_AbilityComponent* AbilityComp = PEV2Char->GetAbilityComponent())
+		{
+			AbilityComp->OnAbilityChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleAbilityChanged);
+			AbilityComp->OnAbilityChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleAbilityChanged);
+
+			AbilityComp->OnAbilityChargesChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleAbilityChargesChanged);
+			AbilityComp->OnAbilityChargesChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleAbilityChargesChanged);
+
+			AbilityComp->OnAbilityCooldownUpdatedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleAbilityCooldownUpdated);
+			AbilityComp->OnAbilityCooldownUpdatedEvent.AddDynamic(this, &APEV2_PlayerController::HandleAbilityCooldownUpdated);
+
+			if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+			{
+				GameHUD->UpdateAbility(AbilityComp->GetCurrentAbility(), AbilityComp->GetRemainingCharges(), AbilityComp->GetRemainingCooldownTime());
+			}
+		}
+
+		if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+		{
+			GameHUD->InitializeRoster(PEV2Char->GetWeaponTierClasses(), PEV2Char->GetCurrentWeaponTier());
+		}
+	}
+}
+
+void APEV2_PlayerController::HandleAbilityChanged(UPEV2_AbilityData* NewAbility, int32 InitialCharges)
+{
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		GameHUD->UpdateAbility(NewAbility, InitialCharges, 0.0f);
+	}
+}
+
+void APEV2_PlayerController::HandleAbilityChargesChanged(int32 RemainingCharges, int32 MaxCharges)
+{
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		APEV2_Character* PEV2Char = Cast<APEV2_Character>(GetPawn());
+		UPEV2_AbilityData* CurrentAbility = PEV2Char && PEV2Char->GetAbilityComponent() ? PEV2Char->GetAbilityComponent()->GetCurrentAbility() : nullptr;
+		const float RemainingCooldown = PEV2Char && PEV2Char->GetAbilityComponent() ? PEV2Char->GetAbilityComponent()->GetRemainingCooldownTime() : 0.0f;
+		GameHUD->UpdateAbility(CurrentAbility, RemainingCharges, RemainingCooldown);
+	}
+}
+
+void APEV2_PlayerController::HandleAbilityCooldownUpdated(float RemainingCooldown, float TotalDuration)
+{
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		GameHUD->UpdateAbilityCooldown(RemainingCooldown, TotalDuration);
+	}
+}
+
+void APEV2_PlayerController::HandleWeaponTierChanged(int32 CurrentTier, int32 MaxTiers)
+{
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		GameHUD->SetActiveWeaponTier(CurrentTier);
 	}
 }
 
@@ -179,11 +239,28 @@ void APEV2_PlayerController::HandleEquippedWeaponChanged(APEV2_WeaponBase* NewWe
 	NewWeapon->OnAmmoChangedEvent.RemoveDynamic(this, &APEV2_PlayerController::HandleAmmoChanged);
 	NewWeapon->OnAmmoChangedEvent.AddDynamic(this, &APEV2_PlayerController::HandleAmmoChanged);
 
+	if (APEV2_Character* PEV2Char = Cast<APEV2_Character>(GetPawn()))
+	{
+		if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+		{
+			GameHUD->SetActiveWeaponTier(PEV2Char->GetCurrentWeaponTier());
+		}
+	}
+
 	HandleAmmoChanged(NewWeapon->GetCurrentAmmo(), NewWeapon->GetMaxMagazineAmmo());
 }
 
 void APEV2_PlayerController::HandleAmmoChanged(int32 CurrentAmmo, int32 MaxAmmo)
 {
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		APEV2_Character* PEV2Char = Cast<APEV2_Character>(GetPawn());
+		APEV2_WeaponBase* CurrentWeapon = PEV2Char && PEV2Char->GetCombatComponent() ? PEV2Char->GetCombatComponent()->GetEquippedWeapon() : nullptr;
+		const bool bIsMelee = CurrentWeapon && CurrentWeapon->IsMeleeWeapon();
+		const FText WeaponName = CurrentWeapon ? CurrentWeapon->GetWeaponName() : FText::GetEmpty();
+		GameHUD->UpdateAmmo(CurrentAmmo, MaxAmmo, bIsMelee, WeaponName);
+	}
+
 	if (UShooterBulletCounterUI* BulletUI = Cast<UShooterBulletCounterUI>(ActiveHUDWidget))
 	{
 		BulletUI->BP_UpdateBulletCounter(MaxAmmo, CurrentAmmo);
@@ -192,10 +269,27 @@ void APEV2_PlayerController::HandleAmmoChanged(int32 CurrentAmmo, int32 MaxAmmo)
 
 void APEV2_PlayerController::HandleHealthChanged(UPEV2_HealthComponent* HealthComp, float Health, float HealthDelta, const class UDamageType* DamageType)
 {
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		const float MaxHealth = HealthComp ? HealthComp->MaxHealth : 100.0f;
+		const float LifePercent = HealthComp ? HealthComp->GetHealthPercent() : 1.0f;
+		GameHUD->UpdateHealth(Health, MaxHealth, LifePercent);
+	}
+
 	if (UShooterBulletCounterUI* BulletUI = Cast<UShooterBulletCounterUI>(ActiveHUDWidget))
 	{
 		const float LifePercent = HealthComp ? HealthComp->GetHealthPercent() : 1.0f;
 		BulletUI->BP_Damaged(LifePercent);
+	}
+}
+
+void APEV2_PlayerController::HandleShieldChanged(UPEV2_HealthComponent* HealthComp, float Shield, float ShieldDelta, float MaxShield)
+{
+	if (UPEV2_GameHUDWidget* GameHUD = Cast<UPEV2_GameHUDWidget>(ActiveHUDWidget))
+	{
+		const float SafeMaxShield = (MaxShield > 0.0f) ? MaxShield : (HealthComp ? HealthComp->MaxShield : 50.0f);
+		const float ShieldPercent = (SafeMaxShield > 0.0f) ? (Shield / SafeMaxShield) : 0.0f;
+		GameHUD->UpdateShield(Shield, SafeMaxShield, ShieldPercent);
 	}
 }
 

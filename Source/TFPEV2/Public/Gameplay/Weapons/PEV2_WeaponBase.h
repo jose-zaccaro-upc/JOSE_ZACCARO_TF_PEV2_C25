@@ -75,6 +75,9 @@ public:
 	bool IsReloading() const { return bIsReloading; }
 
 	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
+	bool CanFire() const;
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
 
 	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
@@ -91,6 +94,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "PEV2|Animation")
 	TSubclassOf<UAnimInstance> GetFirstPersonAnimInstanceClass() const { return FirstPersonAnimInstanceClass; }
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
+	FText GetWeaponName() const { return WeaponName; }
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
+	class UTexture2D* GetWeaponIcon() const { return WeaponIcon; }
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|Weapon")
+	bool IsMeleeWeapon() const { return bIsMelee; }
 
 	UPROPERTY(BlueprintAssignable, Category = "PEV2|Weapon|Events")
 	FOnAmmoChanged OnAmmoChangedEvent;
@@ -137,6 +149,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PEV2|Balance")
 	FText WeaponName;
+
+	/** Icono representativo del arma para la interfaz y visor de arsenal */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PEV2|UI")
+	TObjectPtr<class UTexture2D> WeaponIcon;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PEV2|Balance")
 	float DamagePerShot = 25.0f;
@@ -210,9 +226,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Sockets")
 	bool bCompensateImportRotation = false;
 
-	/** Rotación adicional para la malla de tercera persona en el socket HandGrip_R */
+	/** Desplazamiento relativo para la malla de tercera persona en el socket del personaje */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Sockets")
+	FVector ThirdPersonMeshOffset = FVector::ZeroVector;
+
+	/** Rotación adicional para la malla de tercera persona en el socket del personaje */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Sockets")
 	FRotator ThirdPersonMeshRotation = FRotator::ZeroRotator;
+
+	/** Escala para la malla de tercera persona en el socket del personaje */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Sockets")
+	FVector ThirdPersonMeshScale = FVector(1.0f, 1.0f, 1.0f);
 
 	/** Desplazamiento relativo del arma respecto a la FirstPersonCamera */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Camera")
@@ -221,6 +245,10 @@ protected:
 	/** Rotación relativa del arma respecto a la FirstPersonCamera */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Camera")
 	FRotator FirstPersonWeaponRotation = FRotator(-1.5f, -1.0f, 0.0f);
+
+	/** Escala del arma en primera persona */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Camera")
+	FVector FirstPersonWeaponScale = FVector(1.0f, 1.0f, 1.0f);
 
 	// ==========================================
 	// ANIMACIÓN DEL PERSONAJE

@@ -49,7 +49,7 @@ protected:
 	float RespawnDelay = 3.0f;
 
 	/** Checks if win condition is met */
-	void CheckWinCondition(AController* PotentialWinner, AActor* DamageCauser);
+	void CheckWinCondition(AController* PotentialWinner, AActor* DamageCauser, bool bForceFinalWeaponWin = false);
 
 private:
 	APEV2_GameState* GetPEV2GameState() const;

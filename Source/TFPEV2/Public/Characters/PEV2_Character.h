@@ -71,11 +71,17 @@ public:
 	/** Sincroniza el nivel de arma guardado y la apariencia desde el PlayerState */
 	void RestoreFromPlayerState(class APEV2_PlayerState* InPS);
 
+	UFUNCTION(BlueprintPure, Category = "PEV2|Combat")
+	bool CanPerformCombatActions() const;
+
 	UFUNCTION(BlueprintPure, Category = "PEV2|ArmsRace")
 	int32 GetCurrentWeaponTier() const { return CurrentWeaponIndex; }
 
 	UFUNCTION(BlueprintPure, Category = "PEV2|ArmsRace")
 	int32 GetMaxWeaponTiers() const { return WeaponTierClasses.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|ArmsRace")
+	const TArray<TSubclassOf<APEV2_WeaponBase>>& GetWeaponTierClasses() const { return WeaponTierClasses; }
 
 	UPROPERTY(BlueprintAssignable, Category = "PEV2|ArmsRace|Events")
 	FOnWeaponTierChanged OnWeaponTierChangedEvent;
@@ -96,6 +102,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "PEV2|Components")
 	TObjectPtr<UPEV2_AbilityComponent> AbilityComponent;
 
+	/** Habilidad táctica por defecto otorgada al aparecer en la partida (ej. Granada o Dash) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|Ability")
+	TObjectPtr<class UPEV2_AbilityData> DefaultAbilityData;
+
 	// ==========================================
 	// ARMS RACE REPLICACIÓN
 	// ==========================================
@@ -110,6 +120,10 @@ protected:
 	/** Índice de apariencia visual del personaje (malla Manny/Quinn y variación de skin) */
 	UPROPERTY(ReplicatedUsing = OnRep_MeshAppearanceIndex, BlueprintReadOnly, Category = "PEV2|Appearance")
 	int32 MeshAppearanceIndex;
+
+	/** Si es true, C++ sobreescribe la malla en runtime con variaciones de Manny/Quinn. Si es false (por defecto), respeta el Skeletal Mesh y materiales configurados en el Blueprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "PEV2|Appearance")
+	bool bUseMeshAppearanceVariations;
 
 	UFUNCTION()
 	void OnRep_MeshAppearanceIndex();

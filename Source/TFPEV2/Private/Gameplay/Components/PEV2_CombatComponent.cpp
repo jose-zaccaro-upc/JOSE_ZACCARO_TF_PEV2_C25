@@ -1,8 +1,10 @@
 // Copyright PEV 2 - Gun Master Arena. All Rights Reserved.
 
 #include "Gameplay/Components/PEV2_CombatComponent.h"
+#include "Characters/PEV2_Character.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/World.h"
 
 UPEV2_CombatComponent::UPEV2_CombatComponent()
@@ -43,13 +45,88 @@ void UPEV2_CombatComponent::BeginPlay()
 
 void UPEV2_CombatComponent::StartFiring()
 {
-	if (EquippedWeapon)
+	APEV2_Character* CharOwner = Cast<APEV2_Character>(GetOwner());
+	if (CharOwner && !CharOwner->CanPerformCombatActions())
 	{
-		EquippedWeapon->StartFire();
+		return;
+	}
+
+	FVector AimStart = FVector::ZeroVector;
+	FVector AimDir = FVector::ForwardVector;
+
+	if (CharOwner)
+	{
+		FRotator ViewRot;
+		CharOwner->GetActorEyesViewPoint(AimStart, ViewRot);
+		AimDir = ViewRot.Vector();
+
+		if (CharOwner->IsLocallyControlled() && CharOwner->GetFirstPersonCameraComponent())
+		{
+			AimStart = CharOwner->GetFirstPersonCameraComponent()->GetComponentLocation();
+			AimDir = CharOwner->GetFirstPersonCameraComponent()->GetForwardVector();
+		}
+	}
+
+	if (GetOwner()->HasAuthority())
+	{
+		if (EquippedWeapon)
+		{
+			EquippedWeapon->StartFireWithAim(AimStart, AimDir);
+		}
+	}
+	else
+	{
+		// En el cliente: llamar al Server RPC de disparo garantizado a través del CombatComponent
+		Server_StartFiring(AimStart, AimDir);
+
+		// Ejecución local inmediata si el arma está instanciada
+		if (EquippedWeapon)
+		{
+			EquippedWeapon->StartFireWithAim(AimStart, AimDir);
+		}
 	}
 }
 
 void UPEV2_CombatComponent::StopFiring()
+{
+	if (EquippedWeapon)
+	{
+		EquippedWeapon->StopFire();
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		Server_StopFiring();
+	}
+}
+
+bool UPEV2_CombatComponent::Server_StartFiring_Validate(const FVector_NetQuantize& AimStart, const FVector_NetQuantizeNormal& AimDir)
+{
+	return true;
+}
+
+void UPEV2_CombatComponent::Server_StartFiring_Implementation(const FVector_NetQuantize& AimStart, const FVector_NetQuantizeNormal& AimDir)
+{
+	if (APEV2_Character* CharOwner = Cast<APEV2_Character>(GetOwner()))
+	{
+		if (!CharOwner->CanPerformCombatActions())
+		{
+			return;
+		}
+	}
+
+	if (EquippedWeapon)
+	{
+		EquippedWeapon->StartFireWithAim(AimStart, AimDir);
+	}
+}
+
+bool UPEV2_CombatComponent::Server_StopFiring_Validate()
+{
+	return true;
+}
+
+void UPEV2_CombatComponent::Server_StopFiring_Implementation()
 {
 	if (EquippedWeapon)
 	{

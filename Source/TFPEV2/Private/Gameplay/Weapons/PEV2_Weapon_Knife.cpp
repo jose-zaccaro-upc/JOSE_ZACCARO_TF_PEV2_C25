@@ -17,6 +17,7 @@ APEV2_Weapon_Knife::APEV2_Weapon_Knife()
 	CurrentAmmo = 1;
 	bIsAutomatic = false;
 	bIsMelee = true;
+	FireSound = nullptr;
 	MeleeRange = 190.0f;
 	MeleeRadius = 45.0f;
 	ProjectileImpulseScale = 30.0f;
@@ -33,12 +34,15 @@ APEV2_Weapon_Knife::APEV2_Weapon_Knife()
 		ThirdPersonMesh->SetVisibility(false, true);
 	}
 
-	// Orientación en socket HandGrip_R: hoja orientada horizontalmente hacia adelante
-	ThirdPersonMeshRotation = FRotator(-90.0f, 0.0f, 0.0f);
+	// Orientación en socket de tercera persona (configurable desde Blueprint)
+	ThirdPersonMeshRotation = FRotator::ZeroRotator;
+	ThirdPersonMeshOffset = FVector::ZeroVector;
+	ThirdPersonMeshScale = FVector(1.0f, 1.0f, 1.0f);
 
 	// Vista en primera persona vinculada a la cámara
 	FirstPersonWeaponOffset = FVector(28.0f, 13.0f, -14.0f);
 	FirstPersonWeaponRotation = FRotator(0.0f, -90.0f, 90.0f);
+	FirstPersonWeaponScale = FVector(1.0f, 1.0f, 1.0f);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> KnifeMesh(TEXT("/Game/alstra_infinite/PolyPack-Starter/Shooter-Essentials/Meshes/Props/SM_CombatKnifeV1.SM_CombatKnifeV1"));
 	if (KnifeMesh.Succeeded())
@@ -52,7 +56,7 @@ APEV2_Weapon_Knife::APEV2_Weapon_Knife()
 		if (ThirdPersonStaticMesh)
 		{
 			ThirdPersonStaticMesh->SetStaticMesh(KnifeMesh.Object);
-			ThirdPersonStaticMesh->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
+			ThirdPersonStaticMesh->SetRelativeRotation(FRotator::ZeroRotator);
 			ThirdPersonStaticMesh->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
 		}
 	}

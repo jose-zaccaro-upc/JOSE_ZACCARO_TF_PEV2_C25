@@ -5,7 +5,9 @@
 #include "Characters/PEV2_Character.h"
 #include "Gameplay/Weapons/PEV2_ProjectileBase.h"
 #include "Gameplay/Weapons/PEV2_WeaponBase.h"
+#include "Gameplay/Weapons/PEV2_Weapon_Knife.h"
 #include "Gameplay/Weapons/PEV2_WeaponRoster.h"
+#include "Gameplay/Components/PEV2_CombatComponent.h"
 #include "UI/PEV2_HUD.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -107,18 +109,44 @@ void APEV2_GameMode::OnPlayerKilled(AController* VictimController, AController* 
 
 			if (!bIsAbilityGrenadeKill)
 			{
+				bool bWonByFinalWeapon = false;
+				int32 MaxTiers = 0;
+				int32 CurrentTier = 0;
+
 				if (APEV2_Character* KillerChar = Cast<APEV2_Character>(KillerController->GetPawn()))
 				{
-					KillerChar->AdvanceWeaponTier();
+					MaxTiers = KillerChar->GetMaxWeaponTiers();
+					CurrentTier = KillerChar->GetCurrentWeaponTier();
+					const int32 TargetFinalTier = (MaxTiers > 0) ? (MaxTiers - 1) : FinalWeaponTierIndex;
+
+					// La victoria se consigue EXCLUSIVAMENTE al lograr una baja con la última arma del arsenal (sea cual sea)
+					if (CurrentTier >= TargetFinalTier)
+					{
+						bWonByFinalWeapon = true;
+					}
+					else
+					{
+						KillerChar->AdvanceWeaponTier();
+					}
 				}
 
-				CheckWinCondition(KillerController, DamageCauser);
+				CheckWinCondition(KillerController, DamageCauser, bWonByFinalWeapon);
 			}
 
 			// Notificar al atacante mediante Client RPC para UI y audio local de baja
 			if (APEV2_PlayerController* KillerPC = Cast<APEV2_PlayerController>(KillerController))
 			{
-				KillerPC->Client_NotifyKillScored(KillerPS->Eliminations, KillsToWin);
+				int32 TargetTotal = KillsToWin;
+				int32 CurrentProgress = KillerPS->Eliminations;
+				if (APEV2_Character* KillerChar = Cast<APEV2_Character>(KillerController->GetPawn()))
+				{
+					if (KillerChar->GetMaxWeaponTiers() > 0)
+					{
+						TargetTotal = KillerChar->GetMaxWeaponTiers();
+						CurrentProgress = FMath::Clamp(KillerChar->GetCurrentWeaponTier() + 1, 1, TargetTotal);
+					}
+				}
+				KillerPC->Client_NotifyKillScored(CurrentProgress, TargetTotal);
 			}
 		}
 	}
@@ -211,41 +239,16 @@ void APEV2_GameMode::HandleMatchHasEnded()
 	}
 }
 
-void APEV2_GameMode::CheckWinCondition(AController* PotentialWinner, AActor* DamageCauser)
+void APEV2_GameMode::CheckWinCondition(AController* PotentialWinner, AActor* DamageCauser, bool bForceFinalWeaponWin)
 {
-	if (!HasMatchStarted() || HasMatchEnded())
+	if (HasMatchEnded() || !PotentialWinner)
 	{
 		return;
 	}
 
-	if (PotentialWinner)
+	// La victoria ocurre EXCLUSIVAMENTE al conseguir una baja con la última arma del arsenal
+	if (bForceFinalWeaponWin)
 	{
-		if (APEV2_PlayerState* PS = PotentialWinner->GetPlayerState<APEV2_PlayerState>())
-		{
-			bool bWonMatch = false;
-
-			// Condición 1: Alcanzó la cantidad de kills requeridas
-			if (PS->Eliminations >= KillsToWin)
-			{
-				bWonMatch = true;
-			}
-
-			// Condición 2: Mató con el arma final (Cuchillo de combate)
-			if (APEV2_Character* WinnerChar = Cast<APEV2_Character>(PotentialWinner->GetPawn()))
-			{
-				if (WinnerChar->GetCurrentWeaponTier() >= FinalWeaponTierIndex)
-				{
-					if (DamageCauser && (DamageCauser->IsA<APEV2_Weapon_Knife>() || DamageCauser->GetName().ToLower().Contains(TEXT("knife"))))
-					{
-						bWonMatch = true;
-					}
-				}
-			}
-
-			if (bWonMatch)
-			{
-				EndMatch();
-			}
-		}
+		EndMatch();
 	}
 }

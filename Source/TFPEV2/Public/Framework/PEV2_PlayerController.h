@@ -89,7 +89,22 @@ public:
 	void HandleHealthChanged(UPEV2_HealthComponent* HealthComp, float Health, float HealthDelta, const class UDamageType* DamageType);
 
 	UFUNCTION()
+	void HandleShieldChanged(UPEV2_HealthComponent* HealthComp, float Shield, float ShieldDelta, float MaxShield);
+
+	UFUNCTION()
 	void HandleEquippedWeaponChanged(APEV2_WeaponBase* NewWeapon);
+
+	UFUNCTION()
+	void HandleWeaponTierChanged(int32 CurrentTier, int32 MaxTiers);
+
+	UFUNCTION()
+	void HandleAbilityChanged(class UPEV2_AbilityData* NewAbility, int32 InitialCharges);
+
+	UFUNCTION()
+	void HandleAbilityChargesChanged(int32 RemainingCharges, int32 MaxCharges);
+
+	UFUNCTION()
+	void HandleAbilityCooldownUpdated(float RemainingCooldown, float TotalDuration);
 
 protected:
 	virtual void BeginPlay() override;

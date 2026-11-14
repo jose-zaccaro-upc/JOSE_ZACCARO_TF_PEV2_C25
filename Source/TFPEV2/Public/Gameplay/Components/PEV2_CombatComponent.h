@@ -32,6 +32,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "PEV2|Combat")
 	void StopFiring();
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_StartFiring(const FVector_NetQuantize& AimStart, const FVector_NetQuantizeNormal& AimDir);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_StopFiring();
+
 	UFUNCTION(BlueprintCallable, Category = "PEV2|Combat")
 	void Reload();
 

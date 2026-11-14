@@ -6,7 +6,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "Gameplay/Components/PEV2_HealthComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Camera/CameraComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -193,6 +195,10 @@ void APEV2_WeaponBase::OnRep_Owner()
 void APEV2_WeaponBase::SetThirdPersonDeathView(bool bInDeathView)
 {
 	ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
+	if (!CharOwner)
+	{
+		CharOwner = Cast<ACharacter>(GetAttachParentActor());
+	}
 	const bool bIsLocalOwner = CharOwner ? CharOwner->IsLocallyControlled() : false;
 
 	if (bInDeathView)
@@ -303,23 +309,37 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 
 	const bool bIsRotatedImport = MeshName.Contains(TEXT("zc57")) || MeshName.Contains(TEXT("zc-57")) || bCompensateImportRotation;
 
-	// Vincular mallas de tercera persona al cuerpo del personaje (HandGrip_R)
+	// Vincular mallas de tercera persona al cuerpo del personaje (HandGrip_R o fallback)
 	if (InCharacter->GetMesh())
 	{
+		FName TargetSocket = SocketName;
+		if (!InCharacter->GetMesh()->DoesSocketExist(TargetSocket))
+		{
+			if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("hand_r"))))
+			{
+				TargetSocket = FName(TEXT("hand_r"));
+			}
+			else if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("hand_gun"))))
+			{
+				TargetSocket = FName(TEXT("hand_gun"));
+			}
+			else if (InCharacter->GetMesh()->DoesSocketExist(FName(TEXT("RightHand"))))
+			{
+				TargetSocket = FName(TEXT("RightHand"));
+			}
+		}
+
 		FRotator TPFinalRot = ThirdPersonMeshRotation;
 		if (bIsRotatedImport)
 		{
 			TPFinalRot = FRotator(0.0f, -90.0f, 0.0f);
 		}
-		else if (bIsMelee && TPFinalRot.IsZero())
-		{
-			TPFinalRot = FRotator(-90.0f, 0.0f, 0.0f);
-		}
 
 		if (ThirdPersonMesh && ThirdPersonMesh->GetSkeletalMeshAsset())
 		{
-			ThirdPersonMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, SocketName);
-			ThirdPersonMesh->SetRelativeRotation(TPFinalRot);
+			ThirdPersonMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSocket);
+			ThirdPersonMesh->SetRelativeLocationAndRotation(ThirdPersonMeshOffset, TPFinalRot);
+			ThirdPersonMesh->SetRelativeScale3D(ThirdPersonMeshScale);
 			ThirdPersonMesh->SetOwnerNoSee(bIsLocalOwner);
 			ThirdPersonMesh->SetVisibility(!bIsLocalOwner, true);
 		}
@@ -330,8 +350,9 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 
 		if (ThirdPersonStaticMesh && ThirdPersonStaticMesh->GetStaticMesh())
 		{
-			ThirdPersonStaticMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, SocketName);
-			ThirdPersonStaticMesh->SetRelativeRotation(TPFinalRot);
+			ThirdPersonStaticMesh->AttachToComponent(InCharacter->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSocket);
+			ThirdPersonStaticMesh->SetRelativeLocationAndRotation(ThirdPersonMeshOffset, TPFinalRot);
+			ThirdPersonStaticMesh->SetRelativeScale3D(ThirdPersonMeshScale);
 			ThirdPersonStaticMesh->SetOwnerNoSee(bIsLocalOwner);
 			ThirdPersonStaticMesh->SetVisibility(!bIsLocalOwner, true);
 		}
@@ -362,7 +383,7 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			FirstPersonMesh->AttachToComponent(Cam, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 			FirstPersonMesh->SetRelativeLocationAndRotation(FirstPersonWeaponOffset, FPFinalRot);
-			FirstPersonMesh->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+			FirstPersonMesh->SetRelativeScale3D(FirstPersonWeaponScale);
 			FirstPersonMesh->SetOnlyOwnerSee(true);
 			FirstPersonMesh->SetVisibility(true, true);
 			FirstPersonMesh->SetAnimInstanceClass(nullptr);
@@ -376,7 +397,7 @@ void APEV2_WeaponBase::AttachToOwnerCharacter(ACharacter* InCharacter, FName Soc
 		{
 			FirstPersonStaticMesh->AttachToComponent(Cam, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 			FirstPersonStaticMesh->SetRelativeLocationAndRotation(FirstPersonWeaponOffset, FPFinalRot);
-			FirstPersonStaticMesh->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+			FirstPersonStaticMesh->SetRelativeScale3D(FirstPersonWeaponScale);
 			FirstPersonStaticMesh->SetOnlyOwnerSee(true);
 			FirstPersonStaticMesh->SetVisibility(true, true);
 		}
@@ -507,9 +528,47 @@ FVector APEV2_WeaponBase::GetMuzzleLocation() const
 	return GetActorLocation() + (GetActorForwardVector() * 50.0f);
 }
 
-void APEV2_WeaponBase::StartFire()
+bool APEV2_WeaponBase::CanFire() const
 {
 	if (bIsReloading)
+	{
+		return false;
+	}
+
+	const ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
+	if (!CharOwner)
+	{
+		CharOwner = Cast<ACharacter>(GetAttachParentActor());
+	}
+
+	if (CharOwner)
+	{
+		if (const UPEV2_HealthComponent* HC = CharOwner->FindComponentByClass<UPEV2_HealthComponent>())
+		{
+			if (HC->IsDead())
+			{
+				return false;
+			}
+		}
+	}
+
+	if (const UWorld* World = GetWorld())
+	{
+		if (const AGameStateBase* GS = World->GetGameState())
+		{
+			if (GS->HasMatchEnded())
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+void APEV2_WeaponBase::StartFire()
+{
+	if (!CanFire())
 	{
 		return;
 	}
@@ -548,6 +607,11 @@ void APEV2_WeaponBase::StartFire()
 
 void APEV2_WeaponBase::StartFireWithAim(const FVector& AimStart, const FVector& AimDir)
 {
+	if (!CanFire())
+	{
+		return;
+	}
+
 	if (HasAuthority())
 	{
 		Server_StartFire_Implementation(AimStart, AimDir);
@@ -565,7 +629,7 @@ bool APEV2_WeaponBase::Server_StartFire_Validate(FVector_NetQuantize AimStart, F
 
 void APEV2_WeaponBase::Server_StartFire_Implementation(FVector_NetQuantize AimStart, FVector_NetQuantizeNormal AimDir)
 {
-	if (bIsReloading)
+	if (!CanFire())
 	{
 		return;
 	}
@@ -658,6 +722,12 @@ void APEV2_WeaponBase::Server_Reload_Implementation()
 
 void APEV2_WeaponBase::PerformServerShot()
 {
+	if (!CanFire())
+	{
+		Server_StopFire();
+		return;
+	}
+
 	if (!bIsMelee && CurrentAmmo <= 0)
 	{
 		Server_StopFire();
@@ -671,6 +741,10 @@ void APEV2_WeaponBase::PerformServerShot()
 	}
 
 	ACharacter* CharacterOwner = Cast<ACharacter>(GetOwner());
+	if (!CharacterOwner)
+	{
+		CharacterOwner = Cast<ACharacter>(GetAttachParentActor());
+	}
 	if (!CharacterOwner)
 	{
 		return;
@@ -855,12 +929,16 @@ void APEV2_WeaponBase::PerformServerShot()
 
 void APEV2_WeaponBase::Multicast_PlayFireFX_Implementation(FVector_NetQuantize HitLocation, bool bHit)
 {
-	if (FireSound)
+	if (!bIsMelee && FireSound)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
 	}
 
 	ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
+	if (!CharOwner)
+	{
+		CharOwner = Cast<ACharacter>(GetAttachParentActor());
+	}
 
 	if (FiringMontage)
 	{
@@ -995,6 +1073,10 @@ void APEV2_WeaponBase::Multicast_PlayReloadFX_Implementation()
 	}
 
 	ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
+	if (!CharOwner)
+	{
+		CharOwner = Cast<ACharacter>(GetAttachParentActor());
+	}
 	if (CharOwner)
 	{
 		if (ReloadMontage)
