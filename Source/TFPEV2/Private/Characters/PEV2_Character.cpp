@@ -731,6 +731,13 @@ void APEV2_Character::ApplyCharacterAppearance()
 				GetMesh()->SetAnimInstanceClass(TPAnimClass);
 			}
 		}
+		else
+		{
+			if (UClass* UnarmedAnim = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")))
+			{
+				GetMesh()->SetAnimInstanceClass(UnarmedAnim);
+			}
+		}
 	}
 
 	if (TargetMat0)
