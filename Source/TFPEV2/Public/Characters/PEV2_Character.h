@@ -196,4 +196,8 @@ private:
 	FVector DeathCameraCurrentLoc;
 	FRotator DeathCameraCurrentRot;
 	void UpdateAimPitchReplication();
+
+	uint64 LastFireInputFrame = 0;
+	uint64 LastAbilityInputFrame = 0;
+	uint64 LastReloadInputFrame = 0;
 };

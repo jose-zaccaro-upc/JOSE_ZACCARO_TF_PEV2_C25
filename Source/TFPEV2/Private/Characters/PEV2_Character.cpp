@@ -449,31 +449,14 @@ void APEV2_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	}
 
 	// Fallback directo de teclas (Click Izquierdo = Disparar, R = Recargar, Q = Habilidad, E = Interactuar)
-	// Solo se activa si NO está presente EnhancedInput o si la acción específica no está asignada
+	// Asegura funcionamiento inmediato en PIE para clientes y servidor aún antes de configurar los assets en el IMC
 	if (PlayerInputComponent)
 	{
-		const bool bHasEnhancedInput = (Cast<UEnhancedInputComponent>(PlayerInputComponent) != nullptr);
-
-		if (!bHasEnhancedInput || !FireAction)
-		{
-			PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &APEV2_Character::DoFireStart);
-			PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Released, this, &APEV2_Character::DoFireEnd);
-		}
-
-		if (!bHasEnhancedInput || !ReloadAction)
-		{
-			PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &APEV2_Character::DoReload);
-		}
-
-		if (!bHasEnhancedInput || !UseAbilityAction)
-		{
-			PlayerInputComponent->BindKey(EKeys::Q, IE_Pressed, this, &APEV2_Character::DoUseAbility);
-		}
-
-		if (!bHasEnhancedInput || !InteractAction)
-		{
-			PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &APEV2_Character::DoInteract);
-		}
+		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &APEV2_Character::DoFireStart);
+		PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Released, this, &APEV2_Character::DoFireEnd);
+		PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &APEV2_Character::DoReload);
+		PlayerInputComponent->BindKey(EKeys::Q, IE_Pressed, this, &APEV2_Character::DoUseAbility);
+		PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &APEV2_Character::DoInteract);
 	}
 
 	// Garantizar que el IMC se aplique cuando el Pawn configura su input localmente
@@ -519,6 +502,13 @@ void APEV2_Character::DoFireStart()
 		return;
 	}
 
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastFireInputFrame)
+	{
+		return;
+	}
+	LastFireInputFrame = CurrentFrame;
+
 	if (CombatComponent)
 	{
 		CombatComponent->StartFiring();
@@ -540,6 +530,13 @@ void APEV2_Character::DoReload()
 		return;
 	}
 
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastReloadInputFrame)
+	{
+		return;
+	}
+	LastReloadInputFrame = CurrentFrame;
+
 	if (CombatComponent)
 	{
 		CombatComponent->Reload();
@@ -552,6 +549,13 @@ void APEV2_Character::DoUseAbility()
 	{
 		return;
 	}
+
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastAbilityInputFrame)
+	{
+		return;
+	}
+	LastAbilityInputFrame = CurrentFrame;
 
 	if (AbilityComponent)
 	{
