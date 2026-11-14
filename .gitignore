@@ -608,3 +608,5 @@ FodyWeavers.xsd
 Windows/
 Content/Mercenary_Male_WaveforceStudio/DEMO/ThirdPerson/
 # End of https://www.toptal.com/developers/gitignore/api/unrealengine,windows,visualstudio,visualstudiocode,rider
+**.zip
+**/packaged**
