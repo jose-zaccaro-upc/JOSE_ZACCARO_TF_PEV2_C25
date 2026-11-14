@@ -546,15 +546,6 @@ bool APEV2_WeaponBase::CanFire() const
 		return false;
 	}
 
-	if (const UWorld* World = GetWorld())
-	{
-		const float TimeSinceLastFire = World->GetTimeSeconds() - LastFireTime;
-		if (FireRate > 0.0f && TimeSinceLastFire < (FireRate * 0.75f))
-		{
-			return false;
-		}
-	}
-
 	const ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
 	if (!CharOwner)
 	{
@@ -663,7 +654,6 @@ void APEV2_WeaponBase::Server_StartFire_Implementation(FVector_NetQuantize AimSt
 	bIsFiring = true;
 	LastAimStart = AimStart;
 	LastAimDirection = AimDir;
-	LastFireTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 
 	PerformServerShot();
 
@@ -813,7 +803,6 @@ void APEV2_WeaponBase::PerformServerShot()
 
 	LastAimStart = AimStart;
 	LastAimDirection = AimDir;
-	LastFireTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 
 	// 1. ATAQUE CUERPO A CUERPO (Cuchillo de combate)
 	if (bIsMelee)
