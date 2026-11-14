@@ -70,7 +70,16 @@ public:
 	void ReturnToLobby();
 
 	UFUNCTION(BlueprintCallable, Category = "PEV2|MatchEnd")
+	void ReturnToMainMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "PEV2|MatchEnd")
 	void QuitGame();
+
+	UFUNCTION(BlueprintCallable, Category = "PEV2|Pause")
+	void TogglePauseMenu();
+
+	UFUNCTION(BlueprintPure, Category = "PEV2|Pause")
+	bool IsPauseMenuActive() const;
 
 	/** Widget class opcional para la pantalla de fin de partida */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PEV2|UI")

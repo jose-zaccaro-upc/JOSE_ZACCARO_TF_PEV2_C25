@@ -15,6 +15,7 @@
 #include "Gameplay/Items/PEV2_AbilityData.h"
 #include "Gameplay/Weapons/PEV2_WeaponBase.h"
 #include "UI/PEV2_HUD.h"
+#include "Core/PEV2_GameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -137,6 +138,10 @@ void APEV2_PlayerController::BindToPawn(APawn* InPawn)
 	}
 
 	CreateHUDWidget();
+	if (ActiveHUDWidget)
+	{
+		ActiveHUDWidget->SetVisibility(ESlateVisibility::Visible);
+	}
 
 	if (APEV2_HUD* PEV2HUD = Cast<APEV2_HUD>(GetHUD()))
 	{
@@ -297,6 +302,15 @@ void APEV2_PlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 	AddDefaultMappingContext();
+
+	if (InputComponent)
+	{
+		FInputKeyBinding& EscBinding = InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &APEV2_PlayerController::TogglePauseMenu);
+		EscBinding.bExecuteWhenPaused = true;
+
+		FInputKeyBinding& PBinding = InputComponent->BindKey(EKeys::P, IE_Pressed, this, &APEV2_PlayerController::TogglePauseMenu);
+		PBinding.bExecuteWhenPaused = true;
+	}
 }
 
 void APEV2_PlayerController::BeginPlay()
@@ -305,6 +319,10 @@ void APEV2_PlayerController::BeginPlay()
 
 	AddDefaultMappingContext();
 	CreateHUDWidget();
+	if (ActiveHUDWidget)
+	{
+		ActiveHUDWidget->SetVisibility(ESlateVisibility::Visible);
+	}
 
 	if (IsLocalPlayerController())
 	{
@@ -418,9 +436,10 @@ void APEV2_PlayerController::Client_NotifyPlayerDied_Implementation(float Respaw
 		PEV2HUD->ShowDeathScreen(RespawnDuration);
 	}
 
+	// Mantener el HUD visible para que el jugador conserve la noción de sus stats (0 HP, balas, arma actual)
 	if (ActiveHUDWidget)
 	{
-		ActiveHUDWidget->SetVisibility(ESlateVisibility::Hidden);
+		ActiveHUDWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -449,6 +468,61 @@ void APEV2_PlayerController::Client_ShowMatchEndScreen_Implementation(bool bIsWi
 void APEV2_PlayerController::ReturnToLobby()
 {
 	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/PEV2/Maps/L_Lobby")));
+}
+
+void APEV2_PlayerController::ReturnToMainMenu()
+{
+	if (UPEV2_GameInstance* GI = Cast<UPEV2_GameInstance>(GetGameInstance()))
+	{
+		GI->LeaveSessionAndReturnToMainMenu();
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/PEV2/Maps/L_MainMenu")));
+	}
+}
+
+void APEV2_PlayerController::TogglePauseMenu()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (APEV2_HUD* PEV2HUD = Cast<APEV2_HUD>(GetHUD()))
+	{
+		// Si la partida finalizó, no alternar pausa
+		if (PEV2HUD->IsMatchEnded())
+		{
+			return;
+		}
+
+		PEV2HUD->TogglePauseMenu();
+
+		if (PEV2HUD->IsPauseMenuActive())
+		{
+			FInputModeGameAndUI InputModeData;
+			InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			InputModeData.SetHideCursorDuringCapture(false);
+			SetInputMode(InputModeData);
+			bShowMouseCursor = true;
+		}
+		else
+		{
+			FInputModeGameOnly InputModeData;
+			SetInputMode(InputModeData);
+			bShowMouseCursor = false;
+		}
+	}
+}
+
+bool APEV2_PlayerController::IsPauseMenuActive() const
+{
+	if (APEV2_HUD* PEV2HUD = Cast<APEV2_HUD>(GetHUD()))
+	{
+		return PEV2HUD->IsPauseMenuActive();
+	}
+	return false;
 }
 
 void APEV2_PlayerController::QuitGame()

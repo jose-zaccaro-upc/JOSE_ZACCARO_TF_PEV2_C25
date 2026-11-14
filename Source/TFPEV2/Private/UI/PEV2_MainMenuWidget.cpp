@@ -46,6 +46,8 @@ void UPEV2_MainMenuWidget::NativeConstruct()
 
 	if (CachedGameInstance.IsValid())
 	{
+		CachedGameInstance->CleanupStaleSessions();
+
 		CachedGameInstance->OnCreateSessionCompleteEvent.AddDynamic(this, &UPEV2_MainMenuWidget::OnCreateSessionComplete);
 		CachedGameInstance->OnFindSessionsCompleteEvent.AddDynamic(this, &UPEV2_MainMenuWidget::OnFindSessionsComplete);
 		CachedGameInstance->OnJoinSessionCompleteEvent.AddDynamic(this, &UPEV2_MainMenuWidget::OnJoinSessionComplete);

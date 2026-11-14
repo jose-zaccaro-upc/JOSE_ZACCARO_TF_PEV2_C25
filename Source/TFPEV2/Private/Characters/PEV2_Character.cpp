@@ -37,28 +37,11 @@ APEV2_Character::APEV2_Character()
 	CombatComponent = CreateDefaultSubobject<UPEV2_CombatComponent>(TEXT("CombatComponent"));
 	AbilityComponent = CreateDefaultSubobject<UPEV2_AbilityComponent>(TEXT("AbilityComponent"));
 
-	// Cargar roster predeterminado de Carrera de Armas con los modelos de Fab si está vacío
-	static ConstructorHelpers::FClassFinder<APEV2_WeaponBase> PistolWepClass(TEXT("/Game/PEV2/Gameplay/Weapons/Pistol/BP_Weapon_Pistol.BP_Weapon_Pistol_C"));
-	if (PistolWepClass.Succeeded())
-	{
-		WeaponTierClasses.Add(PistolWepClass.Class);
-	}
-	else
-	{
-		WeaponTierClasses.Add(APEV2_Weapon_TemplatePistol::StaticClass());
-	}
+	// Cargar roster predeterminado de Carrera de Armas con clases nativas y Blueprints válidos
+	WeaponTierClasses.Add(APEV2_Weapon_TemplatePistol::StaticClass());
 	WeaponTierClasses.Add(APEV2_Weapon_SMG::StaticClass());
 	WeaponTierClasses.Add(APEV2_Weapon_BattleRifle::StaticClass());
-
-	static ConstructorHelpers::FClassFinder<APEV2_WeaponBase> LauncherWepClass(TEXT("/Game/PEV2/Gameplay/Weapons/GrenadeLauncher/BP_Weapon_Launcher.BP_Weapon_Launcher_C"));
-	if (LauncherWepClass.Succeeded())
-	{
-		WeaponTierClasses.Add(LauncherWepClass.Class);
-	}
-	else
-	{
-		WeaponTierClasses.Add(APEV2_Weapon_TemplateLauncher::StaticClass());
-	}
+	WeaponTierClasses.Add(APEV2_Weapon_TemplateLauncher::StaticClass());
 	WeaponTierClasses.Add(APEV2_Weapon_Knife::StaticClass());
 
 	// Garantizar que la cápsula bloquee el trazado de disparos (ECC_Visibility) e ignore la cámara

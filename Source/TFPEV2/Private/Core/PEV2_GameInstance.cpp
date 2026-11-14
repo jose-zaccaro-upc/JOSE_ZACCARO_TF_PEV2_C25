@@ -16,9 +16,9 @@ const FName UPEV2_GameInstance::SETTING_ROOM_CODE = FName(TEXT("ROOM_CODE"));
 
 UPEV2_GameInstance::UPEV2_GameInstance()
 {
-	LobbyMapPath = TEXT("L_Lobby");
-	GameArenaMapPath = TEXT("L_GameArena");
-	MainMenuMapPath = TEXT("L_MainMenu");
+	LobbyMapPath = TEXT("/Game/PEV2/Maps/L_Lobby");
+	GameArenaMapPath = TEXT("/Game/PEV2/Maps/L_GameArena");
+	MainMenuMapPath = TEXT("/Game/PEV2/Maps/L_MainMenu");
 
 	bPendingHost = false;
 	PendingMaxPlayers = 4;
@@ -30,6 +30,10 @@ UPEV2_GameInstance::UPEV2_GameInstance()
 	bJoinByCodeLANAttempted = false;
 	bJoinByCodeOnlineAttempted = false;
 	CurrentRoomCode = TEXT("");
+
+	bPendingReturnToMainMenu = false;
+	bPendingJoinSession = false;
+	PendingJoinSessionIndex = INDEX_NONE;
 }
 
 IOnlineSessionPtr UPEV2_GameInstance::GetSessionInterface() const
@@ -134,7 +138,11 @@ void UPEV2_GameInstance::HostSessionWithCode(int32 MaxPlayers, bool bIsLAN, cons
 		PendingMaxPlayers = MaxPlayers;
 		bPendingIsLAN = bIsLAN;
 		PendingCustomCode = CustomCode;
-		DestroyCurrentSession();
+
+		if (ExistingSession->SessionState != EOnlineSessionState::Destroying)
+		{
+			DestroyCurrentSession();
+		}
 		return;
 	}
 
@@ -224,6 +232,12 @@ void UPEV2_GameInstance::FindSessions(bool bIsLAN)
 		OnNetworkErrorEvent.Broadcast(TEXT("Subsistema de red no disponible para buscar partidas."));
 		OnFindSessionsCompleteEvent.Broadcast(false);
 		return;
+	}
+
+	// Si había una búsqueda anterior en progreso, cancelarla
+	if (LastSessionSearch.IsValid() && LastSessionSearch->SearchState == EOnlineAsyncTaskState::InProgress)
+	{
+		SessionInterface->CancelFindSessions();
 	}
 
 	LastSessionSearch = MakeShareable(new FOnlineSessionSearch());
@@ -399,6 +413,17 @@ void UPEV2_GameInstance::JoinFoundSession(int32 SessionIndex)
 		return;
 	}
 
+	// Si el cliente aún tiene una sesión previa abierta, destruirla antes de unirse
+	FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(SESSION_NAME);
+	if (ExistingSession != nullptr)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[PEV2_GameInstance] Destruyendo sesión previa antes de unirse a la nueva..."));
+		bPendingJoinSession = true;
+		PendingJoinSessionIndex = SessionIndex;
+		DestroyCurrentSession();
+		return;
+	}
+
 	JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(
 		FOnJoinSessionCompleteDelegate::CreateUObject(this, &UPEV2_GameInstance::OnJoinSessionComplete)
 	);
@@ -555,7 +580,11 @@ void UPEV2_GameInstance::DestroyCurrentSession()
 		FOnDestroySessionCompleteDelegate::CreateUObject(this, &UPEV2_GameInstance::OnDestroySessionComplete)
 	);
 
-	SessionInterface->DestroySession(SESSION_NAME);
+	if (!SessionInterface->DestroySession(SESSION_NAME))
+	{
+		SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
+		OnDestroySessionComplete(SESSION_NAME, false);
+	}
 }
 
 void UPEV2_GameInstance::OnDestroySessionComplete(FName SessionName, bool bWasSuccessful)
@@ -566,12 +595,98 @@ void UPEV2_GameInstance::OnDestroySessionComplete(FName SessionName, bool bWasSu
 		SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[PEV2_GameInstance] Sesión destruida: %s"), *SessionName.ToString());
+	UE_LOG(LogTemp, Log, TEXT("[PEV2_GameInstance] Sesión destruida: %s (Éxito: %s)"), *SessionName.ToString(), bWasSuccessful ? TEXT("True") : TEXT("False"));
+
+	if (bPendingReturnToMainMenu)
+	{
+		bPendingReturnToMainMenu = false;
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(ReturnToMainMenuTimerHandle);
+			UGameplayStatics::OpenLevel(World, FName(*MainMenuMapPath));
+		}
+		return;
+	}
 
 	if (bPendingHost)
 	{
 		bPendingHost = false;
 		HostSessionWithCode(PendingMaxPlayers, bPendingIsLAN, PendingCustomCode);
+		return;
+	}
+
+	if (bPendingJoinSession)
+	{
+		bPendingJoinSession = false;
+		JoinFoundSession(PendingJoinSessionIndex);
+		return;
+	}
+}
+
+void UPEV2_GameInstance::LeaveSessionAndReturnToMainMenu()
+{
+	UE_LOG(LogTemp, Log, TEXT("[PEV2_GameInstance] LeaveSessionAndReturnToMainMenu solicitado."));
+
+	IOnlineSessionPtr SessionInterface = GetSessionInterface();
+	FNamedOnlineSession* ExistingSession = SessionInterface.IsValid() ? SessionInterface->GetNamedSession(SESSION_NAME) : nullptr;
+
+	if (ExistingSession != nullptr)
+	{
+		bPendingReturnToMainMenu = true;
+		DestroyCurrentSession();
+
+		// Timeout de seguridad de 1.2s para forzar el viaje si el backend no responde
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(ReturnToMainMenuTimerHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				if (bPendingReturnToMainMenu)
+				{
+					bPendingReturnToMainMenu = false;
+					UE_LOG(LogTemp, Warning, TEXT("[PEV2_GameInstance] Timeout esperando destrucción de sesión. Viajando forzosamente a MainMenu..."));
+					if (UWorld* CurrentWorld = GetWorld())
+					{
+						UGameplayStatics::OpenLevel(CurrentWorld, FName(*MainMenuMapPath));
+					}
+				}
+			}), 1.2f, false);
+		}
+	}
+	else
+	{
+		bPendingReturnToMainMenu = false;
+		if (UWorld* World = GetWorld())
+		{
+			UGameplayStatics::OpenLevel(World, FName(*MainMenuMapPath));
+		}
+	}
+}
+
+void UPEV2_GameInstance::CleanupStaleSessions()
+{
+	bPendingJoinByCode = false;
+	bJoinByCodeLANAttempted = false;
+	bJoinByCodeOnlineAttempted = false;
+	bPendingHost = false;
+	bPendingJoinSession = false;
+	bPendingReturnToMainMenu = false;
+
+	IOnlineSessionPtr SessionInterface = GetSessionInterface();
+	if (SessionInterface.IsValid())
+	{
+		// Cancelar cualquier búsqueda previa que haya quedado pendiente
+		if (LastSessionSearch.IsValid() && LastSessionSearch->SearchState == EOnlineAsyncTaskState::InProgress)
+		{
+			SessionInterface->CancelFindSessions();
+		}
+
+		// Si quedó una sesión residual en memoria, destruirla
+		FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(SESSION_NAME);
+		if (ExistingSession != nullptr)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[PEV2_GameInstance] Limpiando sesión residual en menú principal: %s"), *SESSION_NAME.ToString());
+			SessionInterface->DestroySession(SESSION_NAME);
+		}
 	}
 }
 

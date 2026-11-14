@@ -23,8 +23,13 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void ReceivedPlayer() override;
+	virtual void SetupInputComponent() override;
 
 public:
+	/** Regresa al Menú Principal */
+	UFUNCTION(BlueprintCallable, Category = "PEV2|Lobby")
+	void LeaveLobby();
+
 	/** Crea e inicializa el widget del lobby en la pantalla local si aún no existe */
 	UFUNCTION(BlueprintCallable, Category = "PEV2|UI")
 	void SetupLobbyUI();

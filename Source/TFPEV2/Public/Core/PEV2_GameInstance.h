@@ -101,6 +101,18 @@ public:
 	void DestroyCurrentSession();
 
 	/**
+	 * Abandona la sesión actual, destruyéndola limpiamente en el backend antes de viajar a L_MainMenu.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PEV2|Network")
+	void LeaveSessionAndReturnToMainMenu();
+
+	/**
+	 * Limpia cualquier sesión residual o búsqueda en progreso al regresar al menú principal.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PEV2|Network")
+	void CleanupStaleSessions();
+
+	/**
 	 * Retorna la cantidad de sesiones encontradas tras la última búsqueda.
 	 */
 	UFUNCTION(BlueprintPure, Category = "PEV2|Network")
@@ -194,4 +206,10 @@ private:
 	FString PendingRoomCodeToJoin;
 	bool bJoinByCodeLANAttempted;
 	bool bJoinByCodeOnlineAttempted;
+
+	// Parámetros de salida limpia y unión tras destrucción
+	bool bPendingReturnToMainMenu;
+	FTimerHandle ReturnToMainMenuTimerHandle;
+	bool bPendingJoinSession;
+	int32 PendingJoinSessionIndex;
 };

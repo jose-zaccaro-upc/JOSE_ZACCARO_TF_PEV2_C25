@@ -31,6 +31,9 @@ protected:
 	TObjectPtr<UButton> Button_InviteSteam;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> Button_LeaveLobby;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_RoomCode;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -44,6 +47,9 @@ protected:
 
 	UFUNCTION()
 	void HandleInviteSteamClicked();
+
+	UFUNCTION()
+	void HandleLeaveLobbyClicked();
 
 	UFUNCTION()
 	void HandlePlayerCountChanged(int32 NewPlayerCount);
@@ -62,6 +68,10 @@ public:
 	/** Actualiza el texto visual del código de sala */
 	UFUNCTION(BlueprintCallable, Category = "PEV2|Lobby")
 	void UpdateRoomCodeText(const FString& InRoomCode);
+
+	/** Abandona el lobby, destruye la sesión y vuelve al Menú Principal */
+	UFUNCTION(BlueprintCallable, Category = "PEV2|Lobby")
+	void LeaveLobby();
 
 private:
 	TWeakObjectPtr<UPEV2_GameInstance> CachedGameInstance;

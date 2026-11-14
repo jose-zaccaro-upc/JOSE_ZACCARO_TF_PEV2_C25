@@ -3,6 +3,10 @@
 #include "UI/PEV2_LobbyWidget.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/PanelWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Styling/CoreStyle.h"
+#include "Styling/SlateColor.h"
 #include "Framework/PEV2_LobbyGameMode.h"
 #include "Framework/PEV2_LobbyGameState.h"
 #include "Core/PEV2_GameInstance.h"
@@ -29,6 +33,56 @@ void UPEV2_LobbyWidget::NativeConstruct()
 	if (Button_InviteSteam)
 	{
 		Button_InviteSteam->OnClicked.AddDynamic(this, &UPEV2_LobbyWidget::HandleInviteSteamClicked);
+	}
+
+	if (Button_LeaveLobby)
+	{
+		Button_LeaveLobby->OnClicked.AddDynamic(this, &UPEV2_LobbyWidget::HandleLeaveLobbyClicked);
+	}
+	else if (WidgetTree)
+	{
+		// Auto-inyectar botón "Volver al Menú" si WBP_LobbyMenu no lo incluye explícitamente en UMG
+		UPanelWidget* TargetPanel = nullptr;
+		if (Button_StartGame && Button_StartGame->GetParent())
+		{
+			TargetPanel = Button_StartGame->GetParent();
+		}
+		else if (Button_InviteSteam && Button_InviteSteam->GetParent())
+		{
+			TargetPanel = Button_InviteSteam->GetParent();
+		}
+		else if (UPanelWidget* RootPanel = Cast<UPanelWidget>(WidgetTree->RootWidget))
+		{
+			TargetPanel = RootPanel;
+		}
+
+		if (TargetPanel)
+		{
+			Button_LeaveLobby = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("Button_LeaveLobby_Auto"));
+			if (Button_LeaveLobby)
+			{
+				UTextBlock* BtnText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Text_LeaveLobby_Auto"));
+				if (BtnText)
+				{
+					BtnText->SetText(FText::FromString(TEXT("VOLVER AL MENÚ")));
+					FSlateFontInfo FontInfo = FCoreStyle::Get().GetFontStyle("NormalFont");
+					FontInfo.Size = 14;
+					BtnText->SetFont(FontInfo);
+					BtnText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+					BtnText->SetJustification(ETextJustify::Center);
+					Button_LeaveLobby->AddChild(BtnText);
+				}
+
+				FButtonStyle Style = Button_LeaveLobby->GetStyle();
+				Style.Normal.TintColor = FSlateColor(FLinearColor(0.40f, 0.10f, 0.10f, 0.90f));
+				Style.Hovered.TintColor = FSlateColor(FLinearColor(0.70f, 0.15f, 0.15f, 1.0f));
+				Style.Pressed.TintColor = FSlateColor(FLinearColor(0.25f, 0.05f, 0.05f, 1.0f));
+				Button_LeaveLobby->SetStyle(Style);
+
+				TargetPanel->AddChild(Button_LeaveLobby);
+				Button_LeaveLobby->OnClicked.AddDynamic(this, &UPEV2_LobbyWidget::HandleLeaveLobbyClicked);
+			}
+		}
 	}
 
 	if (Text_RoleInfo)
@@ -184,5 +238,22 @@ void UPEV2_LobbyWidget::UpdateRoomCodeText(const FString& InRoomCode)
 			NSLOCTEXT("PEV2", "RoomCodeFormat", "CÓDIGO DE SALA: {0}"),
 			FText::FromString(DisplayCode)
 		));
+	}
+}
+
+void UPEV2_LobbyWidget::HandleLeaveLobbyClicked()
+{
+	LeaveLobby();
+}
+
+void UPEV2_LobbyWidget::LeaveLobby()
+{
+	if (CachedGameInstance.IsValid())
+	{
+		CachedGameInstance->LeaveSessionAndReturnToMainMenu();
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/PEV2/Maps/L_MainMenu")));
 	}
 }

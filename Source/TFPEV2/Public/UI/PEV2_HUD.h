@@ -41,6 +41,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "PEV2|HUD")
 	void ShowMatchEndScreen(bool bInIsWinner);
 
+	/** Alterna la visibilidad del menú de pausa */
+	UFUNCTION(BlueprintCallable, Category = "PEV2|HUD")
+	void TogglePauseMenu();
+
+	/** Indica si el menú de pausa está activo */
+	UFUNCTION(BlueprintPure, Category = "PEV2|HUD")
+	bool IsPauseMenuActive() const { return bIsPauseMenuActive; }
+
+	/** Indica si la partida ha finalizado */
+	UFUNCTION(BlueprintPure, Category = "PEV2|HUD")
+	bool IsMatchEnded() const { return bIsMatchEndScreenActive; }
+
 protected:
 	// ==========================================
 	// CONFIGURACIÓN DE RETÍCULA (CROSSHAIR)
@@ -126,6 +138,7 @@ private:
 	void DrawDirectionalDamageIndicator(const FVector2D& Center, float DeltaSeconds);
 	void DrawDeathScreen(float DeltaSeconds);
 	void DrawMatchEndScreen(float DeltaSeconds);
+	void DrawPauseMenu(float DeltaSeconds);
 
 	// Estado interno dinámico
 	float HitmarkerTimeRemaining = 0.0f;
@@ -147,4 +160,15 @@ private:
 	FVector2D LobbyButtonSize;
 	FVector2D QuitButtonPos;
 	FVector2D QuitButtonSize;
+
+	// Estado del menú de pausa
+	bool bIsPauseMenuActive = false;
+	FVector2D PauseResumeButtonPos;
+	FVector2D PauseResumeButtonSize;
+	FVector2D PauseMainMenuButtonPos;
+	FVector2D PauseMainMenuButtonSize;
+	FVector2D PauseLobbyButtonPos;
+	FVector2D PauseLobbyButtonSize;
+	FVector2D PauseQuitButtonPos;
+	FVector2D PauseQuitButtonSize;
 };

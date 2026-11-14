@@ -71,7 +71,14 @@ void APEV2_HUD::DrawHUD()
 		return;
 	}
 
-	// 2. Pantalla de muerte ("HAS MUERTO")
+	// 2. Menú de pausa
+	if (bIsPauseMenuActive)
+	{
+		DrawPauseMenu(DeltaSeconds);
+		return;
+	}
+
+	// 3. Pantalla de muerte ("HAS MUERTO")
 	if (bIsDeathScreenActive)
 	{
 		DrawDeathScreen(DeltaSeconds);
@@ -111,6 +118,12 @@ void APEV2_HUD::ShowMatchEndScreen(bool bInIsWinner)
 	bIsMatchEndScreenActive = true;
 	bIsWinnerLocal = bInIsWinner;
 	bIsDeathScreenActive = false;
+	bIsPauseMenuActive = false;
+}
+
+void APEV2_HUD::TogglePauseMenu()
+{
+	bIsPauseMenuActive = !bIsPauseMenuActive;
 }
 
 void APEV2_HUD::DrawDeathScreen(float DeltaSeconds)
@@ -368,5 +381,127 @@ void APEV2_HUD::DrawDirectionalDamageIndicator(const FVector2D& Center, float De
 		ArrowColor.A = Alpha;
 
 		DrawRect(ArrowColor, IndicatorPos.X - 8.0f, IndicatorPos.Y - 8.0f, 16.0f, 16.0f);
+	}
+}
+
+void APEV2_HUD::DrawPauseMenu(float DeltaSeconds)
+{
+	const float ScreenW = Canvas->ClipX;
+	const float ScreenH = Canvas->ClipY;
+
+	// Fondo oscuro semi-transparente
+	DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 0.0f, 0.0f, ScreenW, ScreenH);
+
+	// Contenedor central (Card)
+	const float CardW = 380.0f;
+	const float CardH = 430.0f;
+	const float CardX = (ScreenW - CardW) * 0.5f;
+	const float CardY = (ScreenH - CardH) * 0.5f;
+
+	// Fondo del Card
+	DrawRect(FLinearColor(0.06f, 0.09f, 0.14f, 0.95f), CardX, CardY, CardW, CardH);
+
+	// Barra superior de acento (Cyan)
+	DrawRect(FLinearColor(0.0f, 0.7f, 1.0f, 1.0f), CardX, CardY, CardW, 4.0f);
+
+	// Borde fino del Card
+	DrawLine(CardX, CardY, CardX + CardW, CardY, FLinearColor(0.2f, 0.3f, 0.45f, 0.8f), 1.0f);
+	DrawLine(CardX, CardY + CardH, CardX + CardW, CardY + CardH, FLinearColor(0.2f, 0.3f, 0.45f, 0.8f), 1.0f);
+	DrawLine(CardX, CardY, CardX, CardY + CardH, FLinearColor(0.2f, 0.3f, 0.45f, 0.8f), 1.0f);
+	DrawLine(CardX + CardW, CardY, CardX + CardW, CardY + CardH, FLinearColor(0.2f, 0.3f, 0.45f, 0.8f), 1.0f);
+
+	// Título "PAUSA"
+	const FString TitleStr = TEXT("PAUSA");
+	float TitleW = 0.0f, TitleH = 0.0f;
+	GetTextSize(TitleStr, TitleW, TitleH, GEngine->GetLargeFont(), 1.6f);
+	DrawText(TitleStr, FLinearColor::White, CardX + (CardW - TitleW) * 0.5f, CardY + 25.0f, GEngine->GetLargeFont(), 1.6f);
+
+	// Línea separadora bajo el título
+	DrawRect(FLinearColor(0.25f, 0.35f, 0.5f, 0.5f), CardX + 30.0f, CardY + 25.0f + TitleH + 10.0f, CardW - 60.0f, 1.0f);
+
+	// Dimensiones de botones
+	const float BtnW = 300.0f;
+	const float BtnH = 48.0f;
+	const float BtnX = CardX + (CardW - BtnW) * 0.5f;
+	float StartY = CardY + 85.0f;
+	const float Spacing = 60.0f;
+
+	PauseResumeButtonPos = FVector2D(BtnX, StartY);
+	PauseResumeButtonSize = FVector2D(BtnW, BtnH);
+
+	PauseMainMenuButtonPos = FVector2D(BtnX, StartY + Spacing);
+	PauseMainMenuButtonSize = FVector2D(BtnW, BtnH);
+
+	PauseLobbyButtonPos = FVector2D(BtnX, StartY + Spacing * 2.0f);
+	PauseLobbyButtonSize = FVector2D(BtnW, BtnH);
+
+	PauseQuitButtonPos = FVector2D(BtnX, StartY + Spacing * 3.0f);
+	PauseQuitButtonSize = FVector2D(BtnW, BtnH);
+
+	// Detección de hover del mouse
+	float MouseX = 0.0f, MouseY = 0.0f;
+	if (APlayerController* PC = GetOwningPlayerController())
+	{
+		PC->GetMousePosition(MouseX, MouseY);
+	}
+
+	auto IsHovered = [MouseX, MouseY](const FVector2D& Pos, const FVector2D& Size)
+	{
+		return (MouseX >= Pos.X && MouseX <= Pos.X + Size.X && MouseY >= Pos.Y && MouseY <= Pos.Y + Size.Y);
+	};
+
+	const bool bResumeHover = IsHovered(PauseResumeButtonPos, PauseResumeButtonSize);
+	const bool bMenuHover = IsHovered(PauseMainMenuButtonPos, PauseMainMenuButtonSize);
+	const bool bLobbyHover = IsHovered(PauseLobbyButtonPos, PauseLobbyButtonSize);
+	const bool bQuitHover = IsHovered(PauseQuitButtonPos, PauseQuitButtonSize);
+
+	auto DrawButton = [this](const FVector2D& Pos, const FVector2D& Size, const FString& Text, bool bHover, const FLinearColor& NormalCol, const FLinearColor& HoverCol)
+	{
+		FLinearColor BgCol = bHover ? HoverCol : NormalCol;
+		DrawRect(BgCol, Pos.X, Pos.Y, Size.X, Size.Y);
+
+		float TW = 0.0f, TH = 0.0f;
+		GetTextSize(Text, TW, TH, GEngine->GetMediumFont(), 1.05f);
+		DrawText(Text, FLinearColor::White, Pos.X + (Size.X - TW) * 0.5f, Pos.Y + (Size.Y - TH) * 0.5f, GEngine->GetMediumFont(), 1.05f);
+	};
+
+	// 1. REANUDAR
+	DrawButton(PauseResumeButtonPos, PauseResumeButtonSize, TEXT("REANUDAR"), bResumeHover,
+		FLinearColor(0.08f, 0.35f, 0.55f, 0.85f), FLinearColor(0.12f, 0.55f, 0.85f, 0.98f));
+
+	// 2. VOLVER AL MENÚ PRINCIPAL
+	DrawButton(PauseMainMenuButtonPos, PauseMainMenuButtonSize, TEXT("VOLVER AL MENÚ"), bMenuHover,
+		FLinearColor(0.12f, 0.35f, 0.35f, 0.85f), FLinearColor(0.18f, 0.55f, 0.55f, 0.98f));
+
+	// 3. VOLVER AL LOBBY
+	DrawButton(PauseLobbyButtonPos, PauseLobbyButtonSize, TEXT("VOLVER AL LOBBY"), bLobbyHover,
+		FLinearColor(0.12f, 0.22f, 0.45f, 0.85f), FLinearColor(0.18f, 0.35f, 0.70f, 0.98f));
+
+	// 4. SALIR DEL JUEGO
+	DrawButton(PauseQuitButtonPos, PauseQuitButtonSize, TEXT("SALIR DEL JUEGO"), bQuitHover,
+		FLinearColor(0.45f, 0.12f, 0.12f, 0.85f), FLinearColor(0.75f, 0.18f, 0.18f, 0.98f));
+
+	// Procesar clicks del mouse
+	if (APEV2_PlayerController* PEV2_PC = Cast<APEV2_PlayerController>(GetOwningPlayerController()))
+	{
+		if (PEV2_PC->WasInputKeyJustPressed(EKeys::LeftMouseButton))
+		{
+			if (bResumeHover)
+			{
+				PEV2_PC->TogglePauseMenu();
+			}
+			else if (bMenuHover)
+			{
+				PEV2_PC->ReturnToMainMenu();
+			}
+			else if (bLobbyHover)
+			{
+				PEV2_PC->ReturnToLobby();
+			}
+			else if (bQuitHover)
+			{
+				PEV2_PC->QuitGame();
+			}
+		}
 	}
 }

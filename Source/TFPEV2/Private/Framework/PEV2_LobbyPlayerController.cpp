@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/PEV2_LobbyWidget.h"
+#include "Core/PEV2_GameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Camera/CameraActor.h"
 
@@ -61,8 +62,9 @@ void APEV2_LobbyPlayerController::SetupLobbyUI()
 	}
 
 	bShowMouseCursor = true;
-	FInputModeUIOnly InputModeData;
+	FInputModeGameAndUI InputModeData;
 	InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputModeData.SetHideCursorDuringCapture(false);
 	SetInputMode(InputModeData);
 
 	// Enfocar cámara si existe en el nivel de lobby
@@ -101,5 +103,27 @@ void APEV2_LobbyPlayerController::SetupLobbyUI()
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("[PEV2_LobbyPlayerController] No se pudo encontrar LobbyWidgetClass"));
+	}
+}
+
+void APEV2_LobbyPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+
+	if (InputComponent)
+	{
+		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &APEV2_LobbyPlayerController::LeaveLobby);
+	}
+}
+
+void APEV2_LobbyPlayerController::LeaveLobby()
+{
+	if (UPEV2_GameInstance* GI = Cast<UPEV2_GameInstance>(GetGameInstance()))
+	{
+		GI->LeaveSessionAndReturnToMainMenu();
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/PEV2/Maps/L_MainMenu")));
 	}
 }
