@@ -345,6 +345,7 @@ private:
 	FTimerHandle RefireTimerHandle;
 	FTimerHandle ReloadTimerHandle;
 	bool bIsFiring;
+	float LastFireTime = -100.0f;
 
 	FVector LastAimStart;
 	FVector LastAimDirection;
