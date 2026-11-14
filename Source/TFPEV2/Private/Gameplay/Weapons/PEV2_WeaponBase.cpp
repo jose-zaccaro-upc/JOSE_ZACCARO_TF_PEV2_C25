@@ -97,15 +97,79 @@ void APEV2_WeaponBase::BeginPlay()
 		CurrentAmmo = MaxMagazineAmmo;
 	}
 
+	const FString WName = GetName().ToLower();
+	const bool bIsPistol = WName.Contains(TEXT("pistol"));
+
+	// 1. Fallback de audio de recarga y disparo del Starter de Unreal
 	if (!ReloadSound)
 	{
 		ReloadSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/PEV2/Audio/S_WeaponReload.S_WeaponReload"));
 	}
 
+	if (!FireSound)
+	{
+		FireSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/PEV2/Gameplay/Weapons/GrenadeLauncher/Audio/FirstPersonTemplateWeaponFire02.FirstPersonTemplateWeaponFire02"));
+	}
+
+	// 2. Fallback de AnimInstance de tercera persona (postura y locomoción del personaje con arma)
+	if (!ThirdPersonAnimInstanceClass)
+	{
+		if (bIsMelee)
+		{
+			ThirdPersonAnimInstanceClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+		}
+		else if (bIsPistol)
+		{
+			ThirdPersonAnimInstanceClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Pistol.ABP_TP_Pistol_C"));
+		}
+		else
+		{
+			ThirdPersonAnimInstanceClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C"));
+		}
+	}
+
+	// 3. Fallback de AnimInstance de primera persona
+	if (!FirstPersonAnimInstanceClass && !bIsMelee)
+	{
+		if (bIsPistol)
+		{
+			FirstPersonAnimInstanceClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_FP_Pistol.ABP_FP_Pistol_C"));
+		}
+		else
+		{
+			FirstPersonAnimInstanceClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_FP_Weapon.ABP_FP_Weapon_C"));
+		}
+	}
+
+	// 4. Fallback de animación de disparo (Montaje o Secuencia del Starter)
+	if (!FiringMontage && !FiringAnimSequence)
+	{
+		if (bIsMelee)
+		{
+			FiringAnimSequence = LoadObject<UAnimSequenceBase>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01.MM_Attack_01"));
+		}
+		else if (bIsPistol)
+		{
+			FiringMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Fire_Montage.MM_Pistol_Fire_Montage"));
+			if (!FiringMontage)
+			{
+				FiringAnimSequence = LoadObject<UAnimSequenceBase>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Fire.MM_Pistol_Fire"));
+			}
+		}
+		else
+		{
+			FiringMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Fire_Montage.MM_Rifle_Fire_Montage"));
+			if (!FiringMontage)
+			{
+				FiringAnimSequence = LoadObject<UAnimSequenceBase>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Fire.MM_Rifle_Fire"));
+			}
+		}
+	}
+
+	// 5. Fallback de animación de recarga del Starter
 	if (!ReloadMontage && !ReloadAnimSequence && !bIsMelee)
 	{
-		const FString WName = GetName().ToLower();
-		if (WName.Contains(TEXT("pistol")))
+		if (bIsPistol)
 		{
 			ReloadAnimSequence = LoadObject<UAnimSequenceBase>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Pistol/MM_Pistol_Reload.MM_Pistol_Reload"));
 		}
